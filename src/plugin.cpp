@@ -3,6 +3,7 @@
 #include "ControlsManager.h"
 #include "APIManager.h"
 #include "TargetReticleManager.h"
+#include "ModAPI.h"
 
 namespace DTR {
     namespace Interface {
@@ -89,4 +90,20 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* sks
     Hooks::Install();
 
     return true;
+}
+
+extern "C" DLLEXPORT void* SKSEAPI RequestPluginAPI(const DTR_API::InterfaceVersion a_interfaceVersion)
+{
+	auto api = Messaging::DTRInterface::GetSingleton();
+
+	log::info("{} called, InterfaceVersion {}", __FUNCTION__, static_cast<uint8_t>(a_interfaceVersion));
+
+	switch (a_interfaceVersion) {
+	case DTR_API::InterfaceVersion::V1:
+		log::info("{} returned the API singleton", __FUNCTION__);
+		return static_cast<void*>(api);
+	}
+
+	log::info("{} requested the wrong interface version", __FUNCTION__);
+	return nullptr;
 }

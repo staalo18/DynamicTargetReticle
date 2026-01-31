@@ -37,10 +37,18 @@ namespace DTR {
 
             bool IsReticleLocked () const;
 
+            bool IsReticleActive () const;
+
+            RE::Actor* GetReticleTarget() const;
+
             RE::NiPointer<RE::NiAVObject> GetTargetPoint(RE::Actor* a_actor) const;
 
         private:
             TargetReticleManager() = default;
+
+            bool IsTDMLocked();
+            
+            void DispatchTimelineEvent(uint32_t a_messageType, RE::Actor* a_target);
 
             void UpdateReticleState();
 
@@ -48,17 +56,22 @@ namespace DTR {
 
             float GetDistanceRaceSizeMultiplier(RE::TESRace* a_race) const;
 
+            bool IsValidTarget(RE::Actor* a_target) const;
+
             std::weak_ptr<TargetReticle> m_TargetReticle;
             bool m_isInitialized = false;
             ReticleMode m_reticleMode = ReticleMode::kOn;
             bool m_isReticleLocked = false;
             bool m_isWidgetActive = false;
+            RE::Actor* m_reticleTarget = nullptr;
+
+            // Settings
+            int m_reticleLockAnimationStyle = 0;
             float m_maxReticleDistance = 8000.f;
             float m_distanceMultiplierSmall = 1.0f;
             float m_distanceMultiplierLarge = 2.0f;
             float m_distanceMultiplierExtraLarge = 4.0f;
             float m_maxTargetScanAngle = 7.0f;
-            RE::Actor* m_reticleTarget = nullptr;
-            int m_reticleLockAnimationStyle = 0;
+            bool m_considerLOS = false;
     }; // class TargetReticleManager
 }  // namespace DTR

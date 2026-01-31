@@ -5,6 +5,15 @@
 #include "APIManager.h"
 
 namespace DTR {
+    void TargetReticleManager::DispatchTimelineEvent(uint32_t a_messageType, RE::Actor* a_target) {
+        auto* messaging = SKSE::GetMessagingInterface();
+        if (messaging) {
+            DTR_API::DTRTimelineEventData eventData{ a_target };
+            messaging->Dispatch(a_messageType, &eventData, sizeof(eventData), nullptr);
+        }
+    }
+
+
     void TargetReticleManager::Initialize()
     {
         m_isReticleLocked = false;
@@ -68,29 +77,81 @@ namespace DTR {
 
         RE::Actor* newTarget = nullptr;
 
-        RE::Actor* player = RE::PlayerCharacter::GetSingleton();
         if (m_isReticleLocked) {
-            if ( !GetTargetPoint(m_reticleTarget) || (m_reticleTarget && m_reticleTarget->GetDistance(player) > m_maxReticleDistance * GetDistanceRaceSizeMultiplier(m_reticleTarget->GetRace()))) {
-                // lost target or target out of range: release reticle lock
+            if ( !IsValidTarget(m_reticleTarget) ){
+                // release reticle lock
                 ToggleLockReticle();
+
+                if (m_reticleTarget) {
+                    DispatchTimelineEvent(static_cast<uint32_t>(DTR_API::DTRMessage::kLostTarget), nullptr);
+                }
+
                 m_reticleTarget = nullptr;
             }
         } else {
-            newTarget = _ts_SKSEFunctions::GetCrosshairTarget();   
+
+            if (APIs::TrueDirectionalMovementV1 && IsTDMLocked()) {
+                auto targetHandle = APIs::TrueDirectionalMovementV1->GetCurrentTarget();
+                if (targetHandle) {
+                    newTarget = targetHandle.get().get();
+                } else {
+                    newTarget = nullptr;
+                }
+            } else {
+                newTarget = _ts_SKSEFunctions::GetCrosshairTarget();
+            }
+
+            if (!IsValidTarget(newTarget)) {
+                newTarget = nullptr;
+            }
 
             if ((!m_isWidgetActive && newTarget) ||
                 m_reticleTarget != newTarget)
             {
-                m_reticleTarget = newTarget;
+//                bool arg2 = false;
+//                if (newTarget && RE::PlayerCharacter::GetSingleton()->HasLineOfSight(newTarget, arg2)) {
+                    m_reticleTarget = newTarget;
+//                }
+//                else {
+//                    m_reticleTarget = nullptr;
+//                }
+
                 SetReticleTarget();
+                if (m_reticleTarget) {
+                    DispatchTimelineEvent(static_cast<uint32_t>(DTR_API::DTRMessage::kFoundTarget), m_reticleTarget);
+                } else {
+                    DispatchTimelineEvent(static_cast<uint32_t>(DTR_API::DTRMessage::kLostTarget), nullptr);
+                }
             }
         }
 
         UpdateReticleState();
     }
 
+    bool TargetReticleManager::IsTDMLocked() {
+        bool isTDMLocked = false;
+        if (APIs::TrueDirectionalMovementV1 && APIs::TrueDirectionalMovementV1->GetTargetLockState()) {
+            isTDMLocked = true;
+        }
+        return isTDMLocked;
+    }
+
+    bool TargetReticleManager::IsValidTarget(RE::Actor* a_target) const {
+        auto player = RE::PlayerCharacter::GetSingleton();
+        bool arg2 = false;
+
+        return (a_target && GetTargetPoint(a_target) && 
+                (a_target->GetDistance(RE::PlayerCharacter::GetSingleton()) < m_maxReticleDistance * GetDistanceRaceSizeMultiplier(a_target->GetRace())) &&
+                !a_target->IsDead(true) &&
+                (!m_considerLOS || player->HasLineOfSight(a_target, arg2)));
+    }
+
     bool TargetReticleManager::IsReticleLocked() const {
         return m_isReticleLocked;
+    }
+
+    bool TargetReticleManager::IsReticleActive() const {
+        return m_reticleMode == ReticleMode::kOn ? true : false;
     }
 
     void TargetReticleManager::ToggleLockReticle() {
@@ -123,7 +184,7 @@ namespace DTR {
             return;
         }
         
-        widget->UpdateState(m_isReticleLocked, false, 0);
+        widget->UpdateState(m_isReticleLocked, IsTDMLocked(), 0);
     }
 
     void TargetReticleManager::DisposeReticle(bool a_keepTarget) {
@@ -133,6 +194,10 @@ namespace DTR {
         }
 
         if (!a_keepTarget) {
+            if (m_reticleTarget) {
+                DispatchTimelineEvent(static_cast<uint32_t>(DTR_API::DTRMessage::kLostTarget), nullptr);
+            }
+
             m_reticleTarget = nullptr;
         }
 
@@ -207,6 +272,10 @@ namespace DTR {
         m_isWidgetActive = true;
 
         UpdateReticleState();
+    }
+
+    RE::Actor* TargetReticleManager::GetReticleTarget() const {
+        return m_reticleTarget;
     }
 
     RE::NiPointer<RE::NiAVObject> TargetReticleManager::GetTargetPoint(RE::Actor* a_actor) const {

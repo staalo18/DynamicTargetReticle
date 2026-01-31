@@ -17,7 +17,7 @@ namespace DTR {
                 }
                 
                 const uint32_t key = buttonEvent->GetIDCode();
-                if (key == 2) {
+                if (key == 11) {
                     TargetReticleManager::GetSingleton().ToggleLockReticle();
                 }
             }
